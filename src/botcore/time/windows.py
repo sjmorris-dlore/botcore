@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 
-def settled_week_window(weeks_ago: int = 0, today: date | None = None) -> tuple[date, date]:
+def settled_week_time_window(weeks_ago: int = 0, today: date | None = None) -> tuple[date, date]:
     """
     Return reporting window using settled data: 8 days ago through 2 days ago.
 
@@ -18,16 +18,16 @@ def settled_week_window(weeks_ago: int = 0, today: date | None = None) -> tuple[
     return start, end
 
 
-def settled_week_window_iso(
+def settled_week_time_window_iso(
     weeks_ago: int = 0,
     today: date | None = None,
 ) -> tuple[str, str]:
-    """ISO-string variant of `settled_week_window`."""
-    start, end = settled_week_window(weeks_ago=weeks_ago, today=today)
+    """ISO-string variant of `settled_week_time_window`."""
+    start, end = settled_week_time_window(weeks_ago=weeks_ago, today=today)
     return start.isoformat(), end.isoformat()
 
 
-def friday_thursday_window(
+def friday_thursday_time_window(
     weeks_ago: int = 0,
     today: date | None = None,
 ) -> tuple[date, date]:
@@ -47,10 +47,27 @@ def friday_thursday_window(
     return last_fri, last_thu
 
 
-def friday_thursday_window_iso(
+def friday_thursday_time_window_iso(
     weeks_ago: int = 0,
     today: date | None = None,
 ) -> tuple[str, str]:
-    """ISO-string variant of `friday_thursday_window`."""
-    start, end = friday_thursday_window(weeks_ago=weeks_ago, today=today)
+    """ISO-string variant of `friday_thursday_time_window`."""
+    start, end = friday_thursday_time_window(weeks_ago=weeks_ago, today=today)
     return start.isoformat(), end.isoformat()
+
+
+# Backward-compatible aliases.
+def settled_week_window(weeks_ago: int = 0, today: date | None = None) -> tuple[date, date]:
+    return settled_week_time_window(weeks_ago=weeks_ago, today=today)
+
+
+def settled_week_window_iso(weeks_ago: int = 0, today: date | None = None) -> tuple[str, str]:
+    return settled_week_time_window_iso(weeks_ago=weeks_ago, today=today)
+
+
+def friday_thursday_window(weeks_ago: int = 0, today: date | None = None) -> tuple[date, date]:
+    return friday_thursday_time_window(weeks_ago=weeks_ago, today=today)
+
+
+def friday_thursday_window_iso(weeks_ago: int = 0, today: date | None = None) -> tuple[str, str]:
+    return friday_thursday_time_window_iso(weeks_ago=weeks_ago, today=today)
