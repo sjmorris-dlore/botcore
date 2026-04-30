@@ -354,7 +354,7 @@ SERIES_CONTEXT_TR = (
 
 # Content-type groups used by build_series_context.
 # These are string literals matching the content type names used across channels.
-_AUTHOR_ONLY_TYPES = {"behind_the_scenes"}
+_AUTHOR_ONLY_TYPES = {"behind_the_scenes", "for_authors"}
 _CAMPAIGN_MINIMAL_TYPES = {"countdown", "cover_feature", "release_day", "post_launch"}
 _THEMES_ONLY_TYPES = {"quote_graphic", "trope_post", "moodboard_carousel", "world_building"}
 
