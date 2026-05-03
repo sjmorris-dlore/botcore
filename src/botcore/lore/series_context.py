@@ -359,6 +359,205 @@ _CAMPAIGN_MINIMAL_TYPES = {"countdown", "cover_feature", "release_day", "post_la
 _THEMES_ONLY_TYPES = {"quote_graphic", "trope_post", "moodboard_carousel", "world_building"}
 
 
+# ---------------------------------------------------------------------------
+# Block-based context assembly
+# ---------------------------------------------------------------------------
+
+#: All valid coarse block names.
+CONTEXT_BLOCKS = frozenset({
+    "author_bio",       # Author bio paragraph
+    "series_premise",   # Series premise + book summaries
+    "series_themes",    # Themes + key quotes
+    "character_arc",    # One character's arc + quotes (requires spotlight_subject)
+    "all_characters",   # All character arcs (series_recap level)
+    "other_series",     # Also include the non-primary series' premise + themes
+})
+
+#: Default blocks per content type — mirrors the old tier logic, expressed explicitly.
+DEFAULT_CONTEXT_BLOCKS: dict[str, list[str]] = {
+    "quote_graphic":       ["author_bio", "series_premise", "series_themes"],
+    "trope_post":          ["author_bio", "series_premise", "series_themes"],
+    "moodboard_carousel":  ["author_bio", "series_premise", "series_themes"],
+    "character_spotlight": ["author_bio", "series_premise", "series_themes", "character_arc"],
+    "world_building":      ["author_bio", "series_premise", "series_themes"],
+    "behind_the_scenes":   ["author_bio"],
+    "for_authors":         ["author_bio"],
+    "series_recap":        ["author_bio", "series_premise", "series_themes", "all_characters"],
+    "cover_feature":       ["author_bio", "series_premise"],
+    "countdown":           ["author_bio", "series_premise"],
+    "release_day":         ["author_bio", "series_premise"],
+    "post_launch":         ["author_bio", "series_premise"],
+}
+
+_FALLBACK_BLOCKS = ["author_bio", "series_premise", "series_themes"]
+
+
+def build_context_from_lore(
+    series: str,
+    author_data: dict | None,
+    series_data_map: dict,
+    blocks: list[str],
+    spotlight_subject: str | None = None,
+) -> str:
+    """Assemble context from S3 lore JSON dicts (Phase 2 path).
+
+    author_data   — contents of config/author.json
+    series_data_map — {series_id: contents of config/series/{id}/context.json}
+    Falls back gracefully if data is missing; callers should fall back to
+    build_context_from_blocks() if this returns an empty string.
+    """
+    blocks_set = set(blocks)
+    parts: list[str] = []
+
+    if series == "guardian_league":
+        primaries   = ["guardian_league"]
+        secondaries = ["thaumatropic_roots"] if "other_series" in blocks_set else []
+    elif series == "thaumatropic_roots":
+        primaries   = ["thaumatropic_roots"]
+        secondaries = ["guardian_league"] if "other_series" in blocks_set else []
+    else:  # "both" or unknown
+        primaries   = ["guardian_league", "thaumatropic_roots"]
+        secondaries = []
+
+    if "author_bio" in blocks_set and author_data:
+        parts.append(author_data.get("bio", "").strip())
+
+    for sid in primaries + secondaries:
+        sdata = series_data_map.get(sid)
+        if not sdata:
+            continue
+        is_primary = sid in primaries
+
+        if "series_premise" in blocks_set:
+            parts.append(sdata.get("premise", "").strip())
+
+        if "series_themes" in blocks_set:
+            parts.append(sdata.get("themes", "").strip())
+
+        if "all_characters" in blocks_set and is_primary:
+            chars_text = f"KEY CHARACTERS — {sdata.get('title', '').upper()}:\n"
+            for char in sdata.get("characters", []):
+                chars_text += "\n\n" + char.get("arc", "").strip()
+            if sdata.get("shared_arc"):
+                chars_text += "\n\n" + sdata["shared_arc"].strip()
+            parts.append(chars_text)
+        elif "character_arc" in blocks_set and spotlight_subject and is_primary:
+            char = next(
+                (c for c in sdata.get("characters", []) if c["name"] == spotlight_subject),
+                None,
+            )
+            if char:
+                arc_text = "KEY CHARACTER:\n" + char.get("arc", "").strip()
+                quotes = char.get("quotes") or []
+                if quotes:
+                    arc_text += (
+                        f"\n\nKEY QUOTES — {spotlight_subject.upper()}:\n"
+                        + "\n".join(f"- {q}" for q in quotes)
+                    )
+                parts.append(arc_text)
+
+    include_connection = len(primaries) + len(secondaries) > 1
+    if include_connection:
+        # Use connection text from either series
+        for sid in list(primaries) + list(secondaries):
+            conn = (series_data_map.get(sid) or {}).get("series_connection")
+            if conn:
+                parts.append(conn.strip())
+                break
+
+    assembled = "\n\n".join(p for p in parts if p)
+    return assembled
+
+
+def build_context_from_blocks(
+    series: str,
+    blocks: list[str],
+    spotlight_subject: str | None = None,
+) -> str:
+    """Assemble series context from an explicit list of block names.
+
+    This replaces the old tier-based build_series_context() with a composable
+    approach.  The caller supplies exactly which blocks to include; the function
+    assembles only those sections.
+
+    blocks — any subset of CONTEXT_BLOCKS
+    series — "guardian_league" | "thaumatropic_roots" | "both"
+    spotlight_subject — character name; required for the "character_arc" block
+    """
+    blocks = set(blocks)
+    parts: list[str] = []
+
+    # Determine which series to pull from
+    if series == "guardian_league":
+        primaries = ["guardian_league"]
+        secondaries = ["thaumatropic_roots"] if "other_series" in blocks else []
+    elif series == "thaumatropic_roots":
+        primaries = ["thaumatropic_roots"]
+        secondaries = ["guardian_league"] if "other_series" in blocks else []
+    else:  # "both" or unknown
+        primaries = ["guardian_league", "thaumatropic_roots"]
+        secondaries = []
+
+    include_connection = len(primaries) + len(secondaries) > 1
+
+    if "author_bio" in blocks:
+        parts.append(AUTHOR_BIO)
+
+    for s in primaries + secondaries:
+        is_primary = s in primaries
+
+        if "series_premise" in blocks:
+            parts.append(_GL_PREMISE if s == "guardian_league" else _TR_PREMISE)
+
+        if "series_themes" in blocks:
+            parts.append(_GL_THEMES_QUOTES if s == "guardian_league" else _TR_ALL_QUOTES)
+
+        # All character arcs for the series (series_recap level)
+        if "all_characters" in blocks and is_primary:
+            if s == "guardian_league":
+                parts.append(
+                    "KEY CHARACTERS — GUARDIAN LEAGUE:\n"
+                    + "\n\n".join(_GL_CHAR_ARCS.values())
+                    + "\n\n" + _GL_SHARED_ARC
+                )
+            else:
+                parts.append(
+                    "KEY CHARACTERS — THAUMATROPIC ROOTS:\n"
+                    + "\n\n".join(_TR_CHARS.values())
+                )
+
+        # Single character arc — primary series only (or whichever series the subject belongs to)
+        if "character_arc" in blocks and spotlight_subject and is_primary:
+            if s == "guardian_league":
+                arc = _GL_CHAR_ARCS.get(spotlight_subject)
+                if arc:
+                    parts.append("KEY CHARACTER:\n" + arc + "\n\n" + _GL_SHARED_ARC)
+            else:
+                char_info = _TR_CHARS.get(spotlight_subject)
+                if char_info:
+                    quotes = _TR_CHAR_QUOTES.get(spotlight_subject, "")
+                    parts.append(
+                        "KEY CHARACTER:\n" + char_info
+                        + (f"\n\nKEY QUOTES — {spotlight_subject.upper()}:\n{quotes}" if quotes else "")
+                    )
+
+    if include_connection:
+        parts.append(SERIES_CONTEXT_CONNECTION)
+
+    return "\n\n".join(p for p in parts if p)
+
+
+def blocks_from_tier(tier: str) -> list[str]:
+    """Convert an old-style tier name to a block list (migration helper)."""
+    return {
+        "author_only":      ["author_bio"],
+        "themes_only":      ["author_bio", "series_premise", "series_themes"],
+        "character_only":   ["author_bio", "series_premise", "series_themes", "character_arc"],
+        "campaign_minimal": ["author_bio", "series_premise"],
+        "full":             ["author_bio", "series_premise", "series_themes", "all_characters"],
+    }.get(tier, _FALLBACK_BLOCKS)
+
+
 def build_series_context(series, content_type="", spotlight_subject=None):
     """Return only the series context sections needed for content_type + subject.
 
