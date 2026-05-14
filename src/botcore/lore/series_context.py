@@ -380,6 +380,7 @@ DEFAULT_CONTEXT_BLOCKS: dict[str, list[str]] = {
     "moodboard_carousel":  ["author_bio", "series_premise", "series_themes"],
     "character_spotlight": ["author_bio", "series_premise", "series_themes", "character_arc"],
     "world_building":      ["author_bio", "series_premise", "series_themes"],
+    "scene_hook":          ["author_bio", "series_premise", "series_themes", "character_arc"],
     "behind_the_scenes":   ["author_bio"],
     "for_authors":         ["author_bio"],
     "series_recap":        ["author_bio", "series_premise", "series_themes", "all_characters"],
