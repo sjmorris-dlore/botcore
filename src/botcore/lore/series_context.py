@@ -410,14 +410,15 @@ def build_context_from_lore(
     blocks_set = set(blocks)
     parts: list[str] = []
 
-    if series == "guardian_league":
-        primaries   = ["guardian_league"]
-        secondaries = ["thaumatropic_roots"] if "other_series" in blocks_set else []
-    elif series == "thaumatropic_roots":
-        primaries   = ["thaumatropic_roots"]
-        secondaries = ["guardian_league"] if "other_series" in blocks_set else []
+    # Any series whose lore was loaded into series_data_map can be primary —
+    # not just the two original book series. Unknown/"both" uses everything
+    # the caller loaded (callers control the map via the series registry, so
+    # a "both" map already excludes game series).
+    if series != "both" and series in series_data_map:
+        primaries   = [series]
+        secondaries = [s for s in series_data_map if s != series] if "other_series" in blocks_set else []
     else:  # "both" or unknown
-        primaries   = ["guardian_league", "thaumatropic_roots"]
+        primaries   = list(series_data_map)
         secondaries = []
 
     if "author_bio" in blocks_set and author_data:
@@ -488,6 +489,13 @@ def build_context_from_blocks(
     blocks = set(blocks)
     parts: list[str] = []
 
+    # This fallback only knows the two original book series. A series it has
+    # never heard of (e.g. a game series whose S3 lore failed to load) must
+    # NOT be handed GL/TR lore — that would inject the wrong universe into
+    # its prompt. Author bio is the only safe content in that case.
+    if series not in ("guardian_league", "thaumatropic_roots", "both"):
+        return AUTHOR_BIO if "author_bio" in blocks else ""
+
     # Determine which series to pull from
     if series == "guardian_league":
         primaries = ["guardian_league"]
@@ -495,7 +503,7 @@ def build_context_from_blocks(
     elif series == "thaumatropic_roots":
         primaries = ["thaumatropic_roots"]
         secondaries = ["guardian_league"] if "other_series" in blocks else []
-    else:  # "both" or unknown
+    else:  # "both"
         primaries = ["guardian_league", "thaumatropic_roots"]
         secondaries = []
 
