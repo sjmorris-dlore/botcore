@@ -450,12 +450,6 @@ def build_context_from_lore(
             )
             if char:
                 arc_text = "KEY CHARACTER:\n" + char.get("arc", "").strip()
-                quotes = char.get("quotes") or []
-                if quotes:
-                    arc_text += (
-                        f"\n\nKEY QUOTES — {spotlight_subject.upper()}:\n"
-                        + "\n".join(f"- {q}" for q in quotes)
-                    )
                 parts.append(arc_text)
 
     include_connection = len(primaries) + len(secondaries) > 1
